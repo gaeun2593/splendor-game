@@ -1,4 +1,4 @@
-package com.splendor.demo;
+package com.splendor.project;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
