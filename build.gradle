@@ -20,7 +20,6 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
 	// 1. Spring Web + WebSocket
@@ -44,7 +43,6 @@ dependencies {
 	// 5. 유틸리티
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
-	implementation 'org.springframework.boot:spring-boot-starter-devtools'
 
 	// 6. 테스트
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
