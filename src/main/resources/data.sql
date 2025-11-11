@@ -52,7 +52,7 @@ INSERT INTO static_cards (id, level, points, bonus_gem, cost_diamond, cost_sapph
 (37, 1, 0, 'ONYX', 0, 0, 0, 3, 0),
 (38, 1, 1, 'ONYX', 0, 0, 0, 4, 0),
 (39, 1, 0, 'ONYX', 3, 0, 0, 1, 2),
-(40, 1, 0, 'ONYX', 2, 0, 2, 0, 0),
+(40, 1, 0, 'ONYX', 2, 0, 2, 0, 0);
 
 -- ======== 2단계 카드 (총 30장) ========
 
@@ -95,7 +95,7 @@ INSERT INTO static_cards (id, level, points, bonus_gem, cost_diamond, cost_sapph
 (67, 2, 2, 'ONYX', 0, 3, 0, 3, 2),
 (68, 2, 2, 'ONYX', 0, 0, 1, 2, 4),
 (69, 2, 3, 'ONYX', 0, 0, 0, 0, 6),
-(70, 2, 1, 'ONYX', 0, 3, 0, 5, 0),
+(70, 2, 1, 'ONYX', 0, 3, 0, 5, 0);
 
 -- ======== 3단계 카드 (총 20장) ========
 
@@ -128,7 +128,7 @@ INSERT INTO static_cards (id, level, points, bonus_gem, cost_diamond, cost_sapph
 (87, 3, 3, 'ONYX', 3, 3, 3, 5, 0),
 (88, 3, 4, 'ONYX', 0, 0, 0, 0, 7),
 (89, 3, 4, 'ONYX', 0, 0, 3, 3, 6),
-(90, 3, 5, 'ONYX', 0, 0, 7, 0, 3),
+(90, 3, 5, 'ONYX', 0, 0, 7, 0, 3);
 
 
 -- ======== 귀족 타일 (총 10장) ========
