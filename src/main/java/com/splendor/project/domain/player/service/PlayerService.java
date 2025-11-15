@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ import java.util.List;
 public class PlayerService {
 
     private final PlayerRepository playerRepository;
+    private final RoomRepository roomRepository ;
     private final JwtTokenProvider jwtTokenProvider;
 
     /**
@@ -54,6 +57,13 @@ public class PlayerService {
         String roomName = requestRoomDto.getRoomName();
         Room room = new Room(roomName , RoomStatus.WAITING);
         Player player = new Player(room , requestRoomDto.getHostName() , true);// 처음 방을 만든사람이 방장
+        return playerRepository.save(player);
+    }
+
+    public Player join(RequestRoomDto requestRoomDto, Long roomId) {
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new NoSuchElementException("방이 존재하지 않습니다"));
+
+        Player player = new Player(room, requestRoomDto.getHostName(), false);
         return playerRepository.save(player);
     }
 }
