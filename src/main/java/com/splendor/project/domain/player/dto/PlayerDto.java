@@ -1,4 +1,4 @@
-package com.splendor.project.domain.user.dto;
+package com.splendor.project.domain.player.dto;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -7,7 +7,7 @@ import lombok.Setter;
 /**
  * 닉네임 가입 시 사용할 DTO (Request / Response)
  */
-public class UserDto {
+public class PlayerDto {
 
     /**
      * 클라이언트 -> 서버 (닉네임 가입 요청)
@@ -32,7 +32,6 @@ public class UserDto {
         public JoinResponseDto(String userId, String nickname, String jwtToken) {
             this.userId = userId;
             this.nickname = nickname;
-            this.jwtToken = "Bearer " + jwtToken; // Bearer 타입으로 반환
         }
     }
 }
