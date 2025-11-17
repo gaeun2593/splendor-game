@@ -1,8 +1,8 @@
 package com.splendor.project.domain.room.service;
 
+import com.splendor.project.domain.player.dto.PlayerDto;
 import com.splendor.project.domain.player.entity.Player;
 import com.splendor.project.domain.room.dto.request.RequestRoomDto;
-import com.splendor.project.domain.room.dto.response.ResponseRoomDto;
 import com.splendor.project.domain.room.dto.response.ResponseRoomsDto;
 import com.splendor.project.domain.room.entity.Room;
 import com.splendor.project.domain.room.repository.RoomRepository;
@@ -24,14 +24,15 @@ public class RoomService {
         List<Room> rooms = roomRepository.findAll();
         return rooms.stream()
                 .map(room -> {
-                    List<Player> players = room.getPlayers(); // 세션이 살아있으므로 초기화 가능
+                    List<Player> players = room.getPlayers();
                     String hostName = players.stream()
                             .filter(Player::isHosted)
                             .findFirst()
                             .map(Player::getNickname)
                             .orElse("방장 없음");
 
-                    return new ResponseRoomsDto(room.getRoomName(), room.getRoomId(), room.getRoomStatus(), hostName, players.size());
+                    List<PlayerDto> playerDtos = players.stream().map(player -> new PlayerDto(player.getNickname(), player.isReady())).toList();
+                    return new ResponseRoomsDto(room.getRoomName() , room.getRoomId() ,room.getRoomStatus() ,hostName , players.size() , playerDtos);
                 }).toList();
     }
 

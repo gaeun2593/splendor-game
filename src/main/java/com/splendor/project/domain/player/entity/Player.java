@@ -15,7 +15,7 @@ import java.util.UUID;
 public class Player {
 
     @JoinColumn(name = "room_id")
-    @ManyToOne(fetch = FetchType.LAZY , cascade = CascadeType.ALL)
+    @ManyToOne(fetch = FetchType.LAZY)
     Room room;
 
     @Id
@@ -26,13 +26,19 @@ public class Player {
     private String nickname; // 유저 닉네임 (중복 불가) // 방장 이름
 
     private boolean isHosted ;
-    
 
-    public Player(Room room, String nickname, boolean isHosted) {
+    private boolean isReady ;
+
+    public Player(Room room, String nickname, boolean isHosted , boolean isReady) {
         this.playerId = UUID.randomUUID().toString();
         this.room = room;
         room.getPlayers().add(this) ;
         this.nickname = nickname;
         this.isHosted = isHosted;
+        this.isReady = isReady;
+    }
+
+    public void toggleReady(){
+        this.isReady = !this.isReady;
     }
 }
