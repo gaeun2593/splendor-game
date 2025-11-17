@@ -20,6 +20,7 @@ public class PlayerState {
     private String nickname;
     private Map<GemType, Integer> tokens = new HashMap<>();
     private List<StaticCard> purchasedCards = new ArrayList<>();
+    private List<StaticCard> reservedCards = new ArrayList<>(); // 예약 카드 목록 (최대 3장)
 
     public PlayerState(String playerId, String nickname) {
         this.playerId = playerId;
@@ -32,6 +33,7 @@ public class PlayerState {
 
     public void setTokens(Map<GemType, Integer> tokens) { this.tokens = tokens; }
     public void addCard(StaticCard card) { this.purchasedCards.add(card); }
+    public List<StaticCard> getReservedCards() { return reservedCards; }
 
     /**
      * 카드 구매 메인 로직
@@ -115,5 +117,24 @@ public class PlayerState {
         // 황금 토큰 차감
         int currentGold = tokens.getOrDefault(GemType.GOLD, 0);
         tokens.put(GemType.GOLD, currentGold - goldToUse);
+    }
+
+    /**
+     * 예약 로직
+     */
+    public void reserveCard(StaticCard card, boolean giveGoldToken) {
+        // 1. 한도 체크
+        if (reservedCards.size() >= 3) {
+            throw new IllegalStateException("예약은 최대 3장까지만 가능합니다.");
+        }
+
+        // 2. 카드 킵
+        reservedCards.add(card);
+
+        // 3. 황금 토큰 지급 (은행에 재고가 있을 때만 true로 들어옴)
+        if (giveGoldToken) {
+            int currentGold = tokens.getOrDefault(GemType.GOLD, 0);
+            tokens.put(GemType.GOLD, currentGold + 1);
+        }
     }
 }
