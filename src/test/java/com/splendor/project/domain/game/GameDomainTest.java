@@ -104,4 +104,64 @@ class GameDomainTest {
         assertThat(player.getPurchasedCards()).hasSize(3); // 기존2 + 신규1
         assertThat(player.getTokens().get(GemType.DIAMOND)).isEqualTo(0); // 1개 사용됨
     }
+
+    @Test
+    @DisplayName("카드를 예약하면 예약 목록에 추가되고 황금 토큰을 1개 받는다")
+    void reserveCardSuccess() {
+        // given
+        PlayerState player = new PlayerState("p1", "User1");
+        StaticCard card = new StaticCard(1L, 1, 0, "RUBY", 0,0,0,0,0);
+
+        // 초기 황금 토큰 0개
+        player.getTokens().put(GemType.GOLD, 0);
+
+        // when
+        // 황금 토큰 지급 여부는 GameSession이 결정해서 넘겨준다고 가정 (은행 재고 확인 후)
+        player.reserveCard(card, true);
+
+        // then
+        assertThat(player.getReservedCards()).hasSize(1);
+        assertThat(player.getReservedCards()).contains(card);
+        assertThat(player.getTokens().get(GemType.GOLD)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("예약한 카드가 3장 꽉 찼으면 더 이상 예약할 수 없다")
+    void reserveCardFail_MaxLimit() {
+        // given
+        PlayerState player = new PlayerState("p1", "User1");
+        // 이미 3장 예약함
+        player.reserveCard(new StaticCard(1L, 1, 0, "RUBY", 0,0,0,0,0), false);
+        player.reserveCard(new StaticCard(2L, 1, 0, "RUBY", 0,0,0,0,0), false);
+        player.reserveCard(new StaticCard(3L, 1, 0, "RUBY", 0,0,0,0,0), false);
+
+        StaticCard newCard = new StaticCard(4L, 1, 0, "RUBY", 0,0,0,0,0);
+
+        // when & then
+        assertThatThrownBy(() -> player.reserveCard(newCard, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("예약은 최대 3장까지만");
+    }
+
+    @Test
+    @DisplayName("은행에 황금 토큰이 없으면 카드는 예약되지만 황금 토큰은 받지 못한다")
+    void reserveCardWithoutGold() {
+        // given
+        GameSession game = new GameSession(1L);
+        PlayerState player = new PlayerState("p1", "User1");
+        game.addPlayer(player);
+        game.setCurrentPlayerId("p1");
+
+        // 은행의 황금 토큰을 0개로 설정 (테스트 편의상 map 조작 가정)
+        game.getBoardTokens().put(GemType.GOLD, 0);
+
+        StaticCard card = new StaticCard(1L, 1, 0, "RUBY", 0,0,0,0,0);
+
+        // when
+        game.reserveCard("p1", card);
+
+        // then
+        assertThat(player.getReservedCards()).hasSize(1); // 예약은 성공
+        assertThat(player.getTokens().get(GemType.GOLD)).isEqualTo(0); // 토큰은 못 받음
+    }
 }
