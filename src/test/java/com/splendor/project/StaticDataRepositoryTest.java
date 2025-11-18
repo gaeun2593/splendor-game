@@ -1,9 +1,7 @@
 package com.splendor.project;
 
-import com.splendor.project.domain.data.entity.StaticCard;
-import com.splendor.project.domain.data.entity.StaticNoble;
-import com.splendor.project.domain.data.repository.StaticCardRepository;
-import com.splendor.project.domain.data.repository.StaticNobleRepository;
+import com.splendor.project.domain.data.StaticCard;
+import com.splendor.project.domain.data.StaticNoble;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
