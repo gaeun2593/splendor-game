@@ -70,5 +70,7 @@ public class InitialGameService {
         return initialCards;
     }
 }
+// 토큰 구매
+//
 
 

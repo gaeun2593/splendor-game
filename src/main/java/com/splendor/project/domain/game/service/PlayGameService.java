@@ -27,16 +27,16 @@ public class PlayGameService {
     private final InitialGameService initialGameService ;
     private final RoomRepository roomRepository ;
 
-
     public GameStateDto gameStart(Long roomId){
         BoardStateDto boardStateDto = initialGameService.initializeGame();
         Room room = roomRepository.findById(roomId).orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
         List<Player> players = room.getPlayers();
-        // 무작위 턴
         Collections.shuffle(players);
         GamePlayerDto gamePlayerDto = new GamePlayerDto(players.get(0).getNickname(), players.get(0).getPlayerId());
-        List<PlayerStateDto> playerStateDtos = players.stream().map(player -> new PlayerStateDto(new GamePlayerDto(player.getNickname(), player.getPlayerId()), 0
+        List<PlayerStateDto> playerStateDtos = players.stream()
+                .map(player -> new PlayerStateDto(new GamePlayerDto(player.getNickname(), player.getPlayerId()), 0
                 , Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0), Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0))).toList();
        return new GameStateDto(boardStateDto , playerStateDtos, room.getRoomId() , gamePlayerDto);
     }
 }
+

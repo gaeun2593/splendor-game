@@ -1,17 +1,14 @@
-package com.splendor.project.domain.game.conreoller;
+package com.splendor.project.domain.game.controller;
 
 import com.splendor.project.domain.game.dto.response.GameStateDto;
-import com.splendor.project.domain.game.request.ChoicePlayerDto;
+import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
 import com.splendor.project.domain.game.service.PlayGameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
-
-import static com.splendor.project.contants.StompConstants.TOPIC_ROOM_SPECIFIC_PREFIX;
 
 @Controller
 @RequiredArgsConstructor

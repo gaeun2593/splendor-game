@@ -1,4 +1,4 @@
-package com.splendor.project.domain.game.request;
+package com.splendor.project.domain.game.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
