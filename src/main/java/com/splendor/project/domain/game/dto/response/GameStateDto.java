@@ -2,14 +2,22 @@ package com.splendor.project.domain.game.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.springframework.data.redis.core.RedisHash;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Data
 @AllArgsConstructor
-public class GameStateDto {
+@RedisHash("game")
+public class GameStateDto implements Serializable {
+
     private BoardStateDto boardStateDto;
+
     private List<PlayerStateDto> playerStateDto;
-    private Long gameId ;
-    private GamePlayerDto currentPlayer ;
+
+    @org.springframework.data.annotation.Id // Redis Key의 Suffix로 사용 (예: 방 ID가 1이라면 Redis Key는 game:1)
+    private Long gameId;
+
+    private GamePlayerDto currentPlayer;
 }
