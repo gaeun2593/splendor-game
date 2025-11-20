@@ -1,5 +1,7 @@
 package com.splendor.project.domain.game.controller;
 
+import com.splendor.project.domain.data.GemType;
+import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.GameStateDto;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
 import com.splendor.project.domain.game.service.PlayGameService;
@@ -9,6 +11,8 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+
+import java.util.Map;
 
 @Controller
 @RequiredArgsConstructor
@@ -31,5 +35,14 @@ public class GameController {
         messagingTemplate.convertAndSend(specificRoomTopic ,choicePlayerDto.getSplendorAction());
     }
 
+    @MessageMapping("/game-select-token/{roomId}")
+    public void selectTokenMessage(@Payload SelectTokenRequestDto request, @DestinationVariable Long roomId) {
+        // 1. 토큰 선택 로직 실행 (중간 검증 및 상태 저장)
+        Map<GemType, Integer> selectedTokens = playGameService.selectToken(request);
+
+        // 2. 현재까지 선택된 토큰 목록을 클라이언트에 전송하여 UI 업데이트 유도
+        String specificRoomTopic = "/topic/game-select-token/" + roomId;
+        messagingTemplate.convertAndSend(specificRoomTopic, selectedTokens);
+    }
 
 }
