@@ -1,8 +1,8 @@
 package com.splendor.project.domain.game.service;
 
 import com.splendor.project.domain.data.GemType;
+import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
-import com.splendor.project.domain.game.dto.request.TakeTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.*;
 import com.splendor.project.domain.game.repository.GameStateRepository;
 import com.splendor.project.domain.game.repository.SelectTokenStateRepository;
@@ -28,6 +28,10 @@ public class PlayGameService {
     private final RoomRepository roomRepository;
     private final GameStateRepository gameStateRepository; // Redis Repository
     private final SelectTokenStateRepository selectTokenStateRepository; // Redis Repository
+
+    // =================================================================
+    // 1. 초기화 로직
+    // =================================================================
 
     public GameStateDto gameStart(Long roomId) {
         // 1. 보드 및 방 정보 초기화
@@ -66,21 +70,22 @@ public class PlayGameService {
         return gameStateDto;
     }
 
+    // =================================================================
+    // 2. 토큰 선택 (중간 상태 관리) 로직
+    // =================================================================
+
     /**
      * 플레이어가 토큰을 하나씩 선택/취소할 때마다 호출되는 중간 검증 및 상태 관리 로직.
-     * @param request 토큰 선택 요청 (어떤 토큰을 선택/취소했는지)
-     * @return 현재까지 선택된 토큰 목록 및 수량 (Map<GemType, Integer>)
      */
     public Map<GemType, Integer> selectToken(SelectTokenRequestDto request) {
         Long roomId = request.getRoomId();
         GemType token = request.getToken();
         boolean isSelected = request.isSelected();
 
-        // 1. 현재 게임 상태 및 선택 상태 로드
         GameStateDto gameStateDto = gameStateRepository.findById(roomId)
                 .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
 
-        // 1.1. 턴 플레이어 검증
+        // 턴 플레이어 검증
         if (!gameStateDto.getCurrentPlayer().getPlayerId().equals(request.getCurrentTurnId())) {
             throw new IllegalStateException("현재 턴이 아닙니다. 토큰을 선택할 수 없습니다.");
         }
@@ -92,14 +97,13 @@ public class PlayGameService {
         int currentCount = currentSelections.getOrDefault(token, 0);
 
         if (isSelected) {
-            // 토큰 '선택' 로직
             Map<GemType, Integer> proposedSelections = new HashMap<>(currentSelections);
             proposedSelections.put(token, currentCount + 1);
 
-            // 2. 선택 추가 시 검증 로직
+            // 선택 추가 시 검증 로직
             validatePartialTokenAcquisition(proposedSelections, gameStateDto.getBoardStateDto().getAvailableTokens());
 
-            // 3. 검증 통과 시 상태 업데이트 및 저장
+            // 검증 통과 시 상태 업데이트
             currentSelections.put(token, currentCount + 1);
         } else {
             // 토큰 '취소' 로직
@@ -109,19 +113,133 @@ public class PlayGameService {
                     currentSelections.remove(token);
                 }
             }
-            // 취소는 검증이 필요 없으나, 상태는 저장해야 함
         }
 
-        // 4. Redis에 선택 상태 저장
         selectTokenStateRepository.save(selectState);
-
         return currentSelections;
     }
 
+
+    // =================================================================
+    // 3. 토큰 버리기 (10개 초과 시) 로직
+    // =================================================================
+
     /**
-     * 토큰이 하나씩 추가될 때마다 현재까지 선택된 토큰 목록의 유효성을 검사합니다.
-     * @param tokensToTake 현재까지 선택된 토큰 맵
-     * @param availableTokens 보드에 남아있는 토큰 맵
+     * 플레이어가 10개 초과 토큰을 버릴 때 호출되는 로직. (보유 토큰을 보드로 회수)
+     */
+    public GameStateDto discardToken(DiscardTokenRequestDto request) {
+        Long gameId = request.getRoomId();
+        String playerId = request.getCurrentTurnId();
+        GemType tokenToDiscard = request.getToken();
+
+        GameStateDto gameStateDto = gameStateRepository.findById(gameId)
+                .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
+
+        // 턴 플레이어 검증
+        if (!gameStateDto.getCurrentPlayer().getPlayerId().equals(request.getCurrentTurnId())) {
+            throw new IllegalStateException("현재 턴이 아닙니다. 토큰을 버릴 수 없습니다.");
+        }
+
+        PlayerStateDto currentPlayerState = gameStateDto.getPlayerStateDto().stream()
+                .filter(p -> p.getPlayer().getPlayerId().equals(playerId))
+                .findFirst()
+                .orElseThrow(() -> new NoSuchElementException(ErrorCode.PLAYER_NOT_FOUND.getMessage()));
+
+        Map<GemType, Integer> playerTokens = currentPlayerState.getTokens();
+        Map<GemType, Integer> boardTokens = gameStateDto.getBoardStateDto().getAvailableTokens();
+
+        int currentCount = playerTokens.getOrDefault(tokenToDiscard, 0);
+
+        if (currentCount <= 0) {
+            throw new IllegalArgumentException("버리려는 토큰(" + tokenToDiscard + ")을 플레이어가 소유하고 있지 않습니다.");
+        }
+
+        // 플레이어 토큰 감소 (버림)
+        playerTokens.put(tokenToDiscard, currentCount - 1);
+        if (playerTokens.get(tokenToDiscard) == 0) {
+            playerTokens.remove(tokenToDiscard);
+        }
+
+        // 보드 토큰 증가 (보드로 회수)
+        boardTokens.put(tokenToDiscard, boardTokens.getOrDefault(tokenToDiscard, 0) + 1);
+
+        gameStateRepository.save(gameStateDto);
+        return gameStateDto;
+    }
+
+    // =================================================================
+    // 4. 턴 종료 로직
+    // =================================================================
+
+    /**
+     * 현재 턴을 종료하고 다음 플레이어로 턴을 넘깁니다.
+     * 선택된 토큰이 있으면 자동으로 획득(Commit)합니다. (프론트엔드 요구사항 반영)
+     */
+    public GameStateDto endTurn(Long roomId) {
+        GameStateDto gameStateDto = gameStateRepository.findById(roomId)
+                .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
+
+        // 1. 임시 선택 상태 확인 및 처리
+        Optional<SelectTokenStateDto> selectStateOpt = selectTokenStateRepository.findById(roomId);
+
+        if (selectStateOpt.isPresent()) {
+            Map<GemType, Integer> tokensToAcquire = selectStateOpt.get().getTokensToTake();
+            String playerId = gameStateDto.getCurrentPlayer().getPlayerId();
+
+            // 획득할 토큰이 실제로 존재하는 경우에만 커밋 진행
+            if (!tokensToAcquire.isEmpty() && tokensToAcquire.values().stream().mapToInt(Integer::intValue).sum() > 0) {
+
+                // 1.1. 최종 획득 규칙 검증 (Map 형식)
+                validateTokenAcquisition(tokensToAcquire, gameStateDto.getBoardStateDto().getAvailableTokens());
+
+                // 1.2. 플레이어 상태 찾기
+                PlayerStateDto currentPlayerState = gameStateDto.getPlayerStateDto().stream()
+                        .filter(p -> p.getPlayer().getPlayerId().equals(playerId))
+                        .findFirst()
+                        .orElseThrow(() -> new NoSuchElementException(ErrorCode.PLAYER_NOT_FOUND.getMessage()));
+
+                // 1.3. 영구 상태 업데이트 (보드 토큰 감소, 플레이어 토큰 증가)
+                updateBoardTokens(tokensToAcquire, gameStateDto.getBoardStateDto().getAvailableTokens());
+                updatePlayerTokens(tokensToAcquire, currentPlayerState.getTokens());
+            }
+        }
+
+        // 2. 임시 선택 상태 삭제 (획득 여부와 관계없이 정리)
+        selectTokenStateRepository.deleteById(roomId); // 기존 위치보다 위로 이동/재확인
+
+        // 3. 다음 플레이어로 턴 변경 로직 (기존 endTurn 로직)
+        List<PlayerStateDto> players = gameStateDto.getPlayerStateDto();
+        GamePlayerDto currentPlayer = gameStateDto.getCurrentPlayer();
+
+        int currentIndex = -1;
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i).getPlayer().getPlayerId().equals(currentPlayer.getPlayerId())) {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex == -1) {
+            throw new IllegalStateException("현재 턴 플레이어를 찾을 수 없습니다.");
+        }
+
+        int nextIndex = (currentIndex + 1) % players.size();
+        GamePlayerDto nextPlayer = players.get(nextIndex).getPlayer();
+
+        // GameStateDto의 현재 플레이어를 업데이트합니다.
+        gameStateDto.setCurrentPlayer(nextPlayer);
+
+        // 4. Redis에 업데이트된 게임 상태 저장
+        gameStateRepository.save(gameStateDto);
+        return gameStateDto;
+    }
+
+    // =================================================================
+    // 5. 검증 및 상태 업데이트 헬퍼 메서드
+    // =================================================================
+
+    /**
+     * 토큰이 하나씩 추가될 때마다 현재까지 선택된 토큰 목록의 유효성을 검사합니다. (부분 검증)
      */
     private void validatePartialTokenAcquisition(Map<GemType, Integer> tokensToTake, Map<GemType, Integer> availableTokens) {
         // 0. 골드 토큰 요청 검증 (일반 획득 시 선택 불가)
@@ -180,53 +298,9 @@ public class PlayGameService {
     }
 
     /**
-     * 플레이어가 보드에서 보석 토큰을 획득하는 메인 로직.
-     * @param request 토큰 획득 요청 정보 (roomId, playerId, tokensToTake)
-     * @return 업데이트된 게임 상태 DTO
+     * 토큰 획득 요청 DTO에 대한 최종 검증 로직. (takeTokens 전 호출)
      */
-    public GameStateDto takeTokens(TakeTokenRequestDto request) {
-        Long gameId = request.getRoomId();
-        String playerId = request.getPlayerId();
-        Map<GemType, Integer> tokensToTake = request.getTokensToTake();
-
-        // 1. Redis에서 현재 게임 상태 로드
-        GameStateDto gameStateDto = gameStateRepository.findById(gameId)
-                .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
-
-        // 2. 획득 요청의 유효성 검증
-        validateTokenAcquisition(tokensToTake, gameStateDto.getBoardStateDto().getAvailableTokens());
-
-        // 3. 플레이어 상태 찾기
-        PlayerStateDto currentPlayerState = gameStateDto.getPlayerStateDto().stream()
-                .filter(p -> p.getPlayer().getPlayerId().equals(playerId))
-                .findFirst()
-                .orElseThrow(() -> new NoSuchElementException(ErrorCode.PLAYER_NOT_FOUND.getMessage()));
-
-        // 4-1. 보드 토큰 업데이트 (상태)
-        updateBoardTokens(tokensToTake, gameStateDto.getBoardStateDto().getAvailableTokens());
-
-        // 4-2. 플레이어 토큰 업데이트 (상태)
-        updatePlayerTokens(tokensToTake, currentPlayerState.getTokens());
-
-        // 5. 플레이어 최대 토큰 개수(10개) 검증 (사용자 요구 조건)
-        int totalPlayerTokens = currentPlayerState.getTokens().values().stream().mapToInt(Integer::intValue).sum();
-        if (totalPlayerTokens > 10) {
-            // 토큰이 10개를 초과하면, 플레이어는 버리는(discard) 후속 행동을 해야 함
-            // 현재는 초과 상태를 알리고 예외를 발생
-            throw new IllegalStateException(ErrorCode.PLAYER_TOKEN_LIMIT_EXCEEDED.getMessage());
-        }
-
-        // 6. 업데이트된 게임 상태 Redis에 저장
-        gameStateRepository.save(gameStateDto);
-
-        // 7. 다음 턴 로직은 이 메서드가 끝난 후 별도의 서비스나 컨트롤러에서 처리해야 함
-
-        return gameStateDto;
-    }
-
-    // ========== 토큰 획득 검증 로직 (최종 액션용) ==========
     private void validateTokenAcquisition(Map<GemType, Integer> tokensToTake, Map<GemType, Integer> availableTokens) {
-
         // 0. 가져갈 수 없는 골드 토큰 요청 제외
         if (tokensToTake.containsKey(GOLD) && tokensToTake.get(GOLD) > 0) {
             throw new IllegalArgumentException(ErrorCode.INVALID_TOKEN_ACTION.getMessage());
@@ -285,28 +359,20 @@ public class PlayGameService {
         }
     }
 
-    // ========== 보드 토큰 업데이트 로직 ==========
-
+    // 보드 토큰 업데이트 (감소)
     private void updateBoardTokens(Map<GemType, Integer> tokensToTake, Map<GemType, Integer> availableTokens) {
-        // availableTokens는 BoardStateDto에 속한 Map 객체이므로, 변경하면 BoardStateDto에 반영됩니다.
         for (Map.Entry<GemType, Integer> entry : tokensToTake.entrySet()) {
             GemType gemType = entry.getKey();
             int count = entry.getValue();
-
-            // 기존 맵을 직접 수정합니다. (Redis에 DTO 전체를 다시 저장하므로 문제 없음)
             availableTokens.put(gemType, availableTokens.getOrDefault(gemType, 0) - count);
         }
     }
 
-    // ========== 플레이어 토큰 업데이트 로직 ==========
-
+    // 플레이어 토큰 업데이트 (증가)
     private void updatePlayerTokens(Map<GemType, Integer> tokensToTake, Map<GemType, Integer> playerTokens) {
-        // playerTokens는 PlayerStateDto에 속한 Map 객체이므로, 변경하면 PlayerStateDto에 반영됩니다.
         for (Map.Entry<GemType, Integer> entry : tokensToTake.entrySet()) {
             GemType gemType = entry.getKey();
             int count = entry.getValue();
-
-            // 기존 맵을 직접 수정합니다.
             playerTokens.put(gemType, playerTokens.getOrDefault(gemType, 0) + count);
         }
     }
