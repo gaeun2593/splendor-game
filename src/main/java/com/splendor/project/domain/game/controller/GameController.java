@@ -1,6 +1,7 @@
 package com.splendor.project.domain.game.controller;
 
 import com.splendor.project.domain.data.GemType;
+import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.GameStateDto;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
@@ -29,7 +30,7 @@ public class GameController {
     }
 
     @MessageMapping("/game-choice-screen/{roomId}")
-    public void gameChoiceMessage(@Payload ChoicePlayerDto choicePlayerDto , @DestinationVariable Long roomId){
+    public void gameChoiceMessage(@Payload ChoicePlayerDto choicePlayerDto, @DestinationVariable Long roomId){
         System.out.println("choicePlayerDto = " + choicePlayerDto);
         String specificRoomTopic = "/topic/game-choice-screen/" + roomId;
         messagingTemplate.convertAndSend(specificRoomTopic ,choicePlayerDto.getSplendorAction());
@@ -45,4 +46,23 @@ public class GameController {
         messagingTemplate.convertAndSend(specificRoomTopic, selectedTokens);
     }
 
+    @MessageMapping("/game-discard-token/{roomId}")
+    public void discardTokenMessage(@Payload DiscardTokenRequestDto request, @DestinationVariable Long roomId){
+        // 1. 서비스에서 토큰 버리기 로직 처리 및 최종 GameStateDto 업데이트
+        GameStateDto gameStateDto = playGameService.discardToken(request);
+
+        // 2. 버려진 후의 최종 게임 상태를 모든 플레이어에게 브로드캐스트
+        String gameScreenTopic = "/topic/game-screen/" + roomId;
+        messagingTemplate.convertAndSend(gameScreenTopic , gameStateDto);
+    }
+
+    @MessageMapping("/game-end-turn/{roomId}")
+    public void endTurnMessage(@DestinationVariable Long roomId){
+        // 1. 서비스에서 턴 종료 및 다음 플레이어 업데이트 로직 처리
+        GameStateDto gameStateDto = playGameService.endTurn(roomId);
+
+        // 2. 업데이트된 게임 상태를 모든 플레이어에게 브로드캐스트 (턴이 넘어갔음을 알림)
+        String gameScreenTopic = "/topic/game-screen/" + roomId;
+        messagingTemplate.convertAndSend(gameScreenTopic , gameStateDto);
+    }
 }
