@@ -3,6 +3,7 @@ package com.splendor.project.domain.game.dto.response;
 import com.splendor.project.domain.data.GemType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.redis.core.RedisHash;
 
 import java.io.Serializable;
@@ -11,6 +12,7 @@ import java.util.Map;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 @RedisHash("selectedToken") // Redis Key: selectedToken:{roomId}
 public class SelectTokenStateDto implements Serializable {
 
