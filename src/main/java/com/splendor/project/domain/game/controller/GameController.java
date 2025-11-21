@@ -6,6 +6,7 @@ import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.GameStateDto;
 import com.splendor.project.domain.game.dto.response.WebSocketResponse;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
+import com.splendor.project.domain.game.dto.response.SelectedPlayer;
 import com.splendor.project.domain.game.service.PlayGameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -36,10 +37,12 @@ public class GameController {
     }
 
     @MessageMapping("/game-choice-screen/{roomId}")
-    public void gameChoiceMessage(@Payload ChoicePlayerDto choicePlayerDto, @DestinationVariable Long roomId) {
-        System.out.println("choicePlayerDto = " + choicePlayerDto);
+
+    public void gameChoiceMessage(@Payload ChoicePlayerDto choicePlayerDto, @DestinationVariable Long roomId){
         String specificRoomTopic = "/topic/game-choice-screen/" + roomId;
-        messagingTemplate.convertAndSend(specificRoomTopic, choicePlayerDto.getSplendorAction());
+        SelectedPlayer selectedPlayer = new SelectedPlayer(choicePlayerDto.getSplendorAction());
+        messagingTemplate.convertAndSend(specificRoomTopic ,selectedPlayer);
+
     }
 
     // --- 토큰 선택/취소 (selectToken) ---
