@@ -2,6 +2,7 @@ package com.splendor.project.domain.game.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.redis.core.RedisHash;
 
 import java.io.Serializable;
@@ -9,6 +10,7 @@ import java.util.List;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 @RedisHash("game")
 public class GameStateDto implements Serializable {
 

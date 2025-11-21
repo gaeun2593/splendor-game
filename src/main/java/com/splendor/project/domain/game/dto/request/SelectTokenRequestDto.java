@@ -13,7 +13,7 @@ public class SelectTokenRequestDto {
     private Long roomId;
 
     // 현재 턴을 진행 중인 플레이어 ID (검증용)
-    private String currentTurnId;
+    private String playerId;
 
     // 클라이언트가 클릭한 토큰 타입
     private GemType token;
