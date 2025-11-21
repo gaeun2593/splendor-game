@@ -33,15 +33,10 @@ import static com.splendor.project.domain.data.GemType.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PlayGameServiceTest {
-
-    @InjectMocks
-    private PlayGameService playGameService;
 
     @Mock
     private InitialGameService initialGameService;
@@ -53,7 +48,13 @@ class PlayGameServiceTest {
     private GameStateRepository gameStateRepository;
 
     @Mock
-    private SelectTokenStateRepository selectTokenStateRepository; // Mock 추가
+    private SelectTokenStateRepository selectTokenStateRepository;
+
+    @Mock // ✨ 새 Validator Mock 추가
+    private TokenAcquisitionValidator tokenAcquisitionValidator;
+
+    @InjectMocks // ✨ Mock 객체들을 PlayGameService에 주입
+    private PlayGameService playGameService;
 
     private final Long TEST_ROOM_ID = 1L;
     private final String HOST_ID = "host-id";
@@ -139,7 +140,7 @@ class PlayGameServiceTest {
     }
 
     // =================================================================
-    // 2. 토큰 선택 (selectToken) 테스트
+    // 2. 토큰 선택 (selectToken) 테스트 (Validator Mocking 적용)
     // =================================================================
 
     @Test
@@ -155,18 +156,18 @@ class PlayGameServiceTest {
 
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
-        // findById가 처음에는 empty로 새 객체를 생성하고, 그 이후에는 그 객체를 반환하도록 설정.
-        // Mockito 체이닝 대신, 단순화를 위해 항상 mutableSelectState가 로드되는 것으로 가정 (orElseGet 경로를 피하기 위해)
+        // findById가 항상 mutableSelectState를 반환하도록 설정하여 상태 누적 재현
         when(selectTokenStateRepository.findById(TEST_ROOM_ID))
                 .thenReturn(Optional.of(mutableSelectState));
 
         when(selectTokenStateRepository.save(any(SelectTokenStateDto.class))).thenReturn(mutableSelectState);
 
+        // Validator는 성공(Do Nothing)이 기본 동작이므로 별도 설정 불필요
+
         // When
-        // DTO는 mutable하므로, findById가 mutableSelectState를 반환하면 상태가 누적됨.
-        playGameService.selectToken(request1); // finds mutableSelectState, updates it to {DIAMOND: 1}
-        playGameService.selectToken(request2); // finds mutableSelectState, updates it to {DIAMOND: 1, SAPPHIRE: 1}
-        Map<GemType, Integer> result = playGameService.selectToken(request3); // finds mutableSelectState, updates it to {DIAMOND: 1, SAPPHIRE: 1, RUBY: 1}
+        playGameService.selectToken(request1);
+        playGameService.selectToken(request2);
+        Map<GemType, Integer> result = playGameService.selectToken(request3);
 
         // Then
         assertThat(result).hasSize(3);
@@ -175,6 +176,8 @@ class PlayGameServiceTest {
                 .containsEntry(SAPPHIRE, 1)
                 .containsEntry(RUBY, 1);
         verify(selectTokenStateRepository, times(3)).save(any(SelectTokenStateDto.class));
+        // Validator가 3번 호출되었는지 검증
+        verify(tokenAcquisitionValidator, times(3)).validatePartialTokenAcquisition(any(), any());
     }
 
     @Test
@@ -183,17 +186,24 @@ class PlayGameServiceTest {
         // Given
         SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
 
-        // Mock 현재 선택 상태: 이미 3개를 선택했다고 가정
         SelectTokenStateDto selectState = new SelectTokenStateDto(TEST_ROOM_ID, HOST_ID);
         selectState.getTokensToTake().putAll(Map.of(DIAMOND, 1, SAPPHIRE, 1, RUBY, 1)); // 총 3개
 
         when(selectTokenStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(selectState));
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
+        // ✨ Validator Mocking: 4번째 토큰 선택 시 발생하는 예외를 던지도록 설정
+        doThrow(new IllegalArgumentException(ErrorCode.INVALID_TOKEN_ACTION.getMessage() + " (최대 3개 초과)"))
+                .when(tokenAcquisitionValidator).validatePartialTokenAcquisition(any(), any());
+
+
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> {
             playGameService.selectToken(request);
         }, ErrorCode.INVALID_TOKEN_ACTION.getMessage() + " (최대 3개 초과)");
+
+        verify(selectTokenStateRepository, times(0)).save(any());
+        verify(tokenAcquisitionValidator, times(1)).validatePartialTokenAcquisition(any(), any());
     }
 
     @Test
@@ -203,23 +213,26 @@ class PlayGameServiceTest {
         // 테스트를 위해 초기 상태에서 ONYX 토큰 개수를 3개로 설정 (4개 미만)
         initialGameState.getBoardStateDto().getAvailableTokens().put(ONYX, 3);
 
-        // 첫 번째 ONYX 선택 요청
         SelectTokenRequestDto request1 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
-        // 두 번째 ONYX 선택 요청
         SelectTokenRequestDto request2 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
 
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
-        // Mocking 상태 유지를 위한 mutable DTO
         SelectTokenStateDto mutableSelectState = new SelectTokenStateDto(TEST_ROOM_ID, HOST_ID);
 
-        // ⭐ 수정: findById가 항상 mutableSelectState를 반환하도록 설정.
+        // Mocking 상태 유지를 위한 설정
         when(selectTokenStateRepository.findById(TEST_ROOM_ID))
                 .thenReturn(Optional.of(mutableSelectState));
 
         when(selectTokenStateRepository.save(any(SelectTokenStateDto.class))).thenReturn(mutableSelectState);
 
-        // 1. 첫 번째 선택 (ONYX: 1) -> 성공, mutableSelectState에 {ONYX: 1} 저장됨
+        // ✨ Validator Mocking: 첫 번째 호출은 성공, 두 번째 호출은 실패하도록 설정
+        doNothing() // 1. 첫 번째 호출은 성공
+                .doThrow(new IllegalArgumentException(ErrorCode.INVALID_TWO_TOKEN_RULE.getMessage())) // 2. 두 번째 호출은 실패
+                .when(tokenAcquisitionValidator).validatePartialTokenAcquisition(any(), any());
+
+
+        // 1. 첫 번째 선택 (ONYX: 1) -> 성공
         playGameService.selectToken(request1);
 
         // 2. 두 번째 선택 (ONYX: 2 시도 -> 실패 예상)
@@ -229,6 +242,32 @@ class PlayGameServiceTest {
 
         // save가 1번만 호출되었는지 검증 (첫 번째 성공만)
         verify(selectTokenStateRepository, times(1)).save(any());
+        // Validator가 총 2번 호출되었는지 검증
+        verify(tokenAcquisitionValidator, times(2)).validatePartialTokenAcquisition(any(), any());
+    }
+
+    // =================================================================
+    // 2.5. 보안 취약점 방지 테스트 (새로운 턴 검증 로직 검증)
+    // =================================================================
+
+    @Test
+    @DisplayName("실패: 현재 턴이 아닌 유저가 토큰 선택을 시도하면 IllegalStateException이 발생해야 한다.")
+    void selectToken_ShouldFail_WhenNotCurrentPlayerTriesToSelect() {
+        // Given
+        // 현재 턴은 HOST_ID (setUp에서 설정)
+        // GUEST_ID가 선택을 시도하는 요청
+        SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, GUEST_ID, DIAMOND, true);
+
+        when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
+
+        // When & Then
+        assertThrows(IllegalStateException.class, () -> {
+            playGameService.selectToken(request);
+        }, "현재 턴이 아닙니다. 토큰을 선택할 수 없습니다.");
+
+        // save는 물론, Validator도 호출되지 않았는지 확인
+        verify(selectTokenStateRepository, times(0)).save(any());
+        verify(tokenAcquisitionValidator, times(0)).validatePartialTokenAcquisition(any(), any());
     }
 
 
@@ -305,6 +344,10 @@ class PlayGameServiceTest {
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
         when(gameStateRepository.save(any(GameStateDto.class))).thenAnswer(i -> i.getArgument(0));
 
+        // Validator Mocking: 최종 검증이 성공하도록 설정 (Do Nothing)
+        // Verify the final validator was called once and succeeded
+        verify(tokenAcquisitionValidator, times(0)).validateTokenAcquisition(any(), any());
+
         // When
         GameStateDto result = playGameService.endTurn(TEST_ROOM_ID);
 
@@ -329,6 +372,9 @@ class PlayGameServiceTest {
         // 4. 턴 변경 검증 (HOST -> GUEST)
         assertThat(result.getCurrentPlayer().getPlayerId()).isEqualTo(GUEST_ID);
         verify(gameStateRepository, times(1)).save(any(GameStateDto.class));
+
+        // 최종 Validator 호출 검증
+        verify(tokenAcquisitionValidator, times(1)).validateTokenAcquisition(any(), any());
     }
 
     @Test
@@ -354,5 +400,8 @@ class PlayGameServiceTest {
         // 3. 턴 변경 검증 (HOST -> GUEST)
         assertThat(result.getCurrentPlayer().getPlayerId()).isEqualTo(GUEST_ID);
         verify(gameStateRepository, times(1)).save(any(GameStateDto.class));
+
+        // 획득을 스킵했으므로 최종 Validator는 호출되지 않아야 함
+        verify(tokenAcquisitionValidator, times(0)).validateTokenAcquisition(any(), any());
     }
 }
