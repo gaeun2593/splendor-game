@@ -3,6 +3,7 @@ package com.splendor.project.domain.game.service;
 import com.splendor.project.domain.data.StaticCard;
 import com.splendor.project.domain.data.StaticNoble;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -11,6 +12,7 @@ import java.util.stream.Collectors;
 
 import static com.splendor.project.domain.data.GemType.*;
 
+@Getter
 @Component
 public class GameStaticDataLoader {
 
