@@ -28,6 +28,6 @@ public class WebSocketResponse<T> implements Serializable {
 
     // 에러 응답 생성 (메시지 포함)
     public static <T> WebSocketResponse<T> error(String message) {
-        return new WebSocketResponse<>("ERROR", null, message);
+        return new WebSocketResponse<>("ERROR", null , message);
     }
 }

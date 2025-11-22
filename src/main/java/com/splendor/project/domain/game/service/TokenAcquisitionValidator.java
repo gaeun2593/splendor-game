@@ -59,6 +59,7 @@ public class TokenAcquisitionValidator {
         } else if (distinctGemCount >= 2) {
             // 4. 서로 다른 종류 토큰 획득 시 개수 검증 (각각 1개만 가능)
             if (validTokensToTake.values().stream().anyMatch(count -> count > 1)) {
+
                 throw new GameLogicException(ErrorCode.INVALID_TOKEN_ACTION);
             }
         }
