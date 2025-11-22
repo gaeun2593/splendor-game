@@ -4,12 +4,9 @@ import com.splendor.project.domain.data.GemType;
 import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectCardRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
-import com.splendor.project.domain.game.dto.response.GameStateDto;
-import com.splendor.project.domain.game.dto.response.ResponseTokenDto;
+import com.splendor.project.domain.game.dto.response.*;
 
-import com.splendor.project.domain.game.dto.response.WebSocketResponse;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
-import com.splendor.project.domain.game.dto.response.SelectedPlayer;
 import com.splendor.project.domain.game.service.PlayGameService;
 import com.splendor.project.exception.GameLogicException;
 import lombok.RequiredArgsConstructor;

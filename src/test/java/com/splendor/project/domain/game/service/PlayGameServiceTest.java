@@ -10,11 +10,13 @@ import com.splendor.project.domain.game.dto.response.PlayerStateDto;
 import com.splendor.project.domain.game.dto.response.SelectTokenStateDto;
 import com.splendor.project.domain.game.repository.GameStateRepository;
 import com.splendor.project.domain.game.repository.SelectTokenStateRepository;
+import com.splendor.project.domain.game.repository.SelectionCardStateRepository;
 import com.splendor.project.domain.player.entity.Player;
 import com.splendor.project.domain.room.entity.Room;
 import com.splendor.project.domain.room.entity.RoomStatus;
 import com.splendor.project.domain.room.repository.RoomRepository;
 import com.splendor.project.exception.ErrorCode;
+import com.splendor.project.exception.GameLogicException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.splendor.project.domain.data.GemType.*;
+import static com.splendor.project.domain.game.dto.request.SelectStatus.IS_SELECT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,10 +53,13 @@ class PlayGameServiceTest {
     @Mock
     private SelectTokenStateRepository selectTokenStateRepository;
 
-    @Mock // ✨ 새 Validator Mock 추가
+    @Mock
+    private SelectionCardStateRepository cardSelectionStateRepository;
+
+    @Mock
     private TokenAcquisitionValidator tokenAcquisitionValidator;
 
-    @InjectMocks // ✨ Mock 객체들을 PlayGameService에 주입
+    @InjectMocks
     private PlayGameService playGameService;
 
     private final Long TEST_ROOM_ID = 1L;
@@ -147,9 +153,9 @@ class PlayGameServiceTest {
     @DisplayName("성공: 다른 보석 3개를 선택하고 임시 상태에 저장되어야 한다.")
     void selectToken_ShouldStoreThreeDifferentTokens() {
         // Given
-        SelectTokenRequestDto request1 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, DIAMOND, true);
-        SelectTokenRequestDto request2 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, SAPPHIRE, true);
-        SelectTokenRequestDto request3 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, RUBY, true);
+        SelectTokenRequestDto request1 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, DIAMOND, IS_SELECT);
+        SelectTokenRequestDto request2 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, SAPPHIRE, IS_SELECT);
+        SelectTokenRequestDto request3 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, RUBY, IS_SELECT);
 
         // Mocking 상태 유지를 위한 mutable DTO
         SelectTokenStateDto mutableSelectState = new SelectTokenStateDto(TEST_ROOM_ID, HOST_ID);
@@ -167,7 +173,7 @@ class PlayGameServiceTest {
         // When
         playGameService.selectToken(request1);
         playGameService.selectToken(request2);
-        Map<GemType, Integer> result = playGameService.selectToken(request3);
+        Map<GemType, Integer> result = playGameService.selectToken(request3).getToken();
 
         // Then
         assertThat(result).hasSize(3);
@@ -184,7 +190,7 @@ class PlayGameServiceTest {
     @DisplayName("실패: 이미 3개를 선택했는데 4번째 토큰을 선택하면 예외가 발생해야 한다.")
     void selectToken_ShouldFail_WhenSelectingFourthToken() {
         // Given
-        SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
+        SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, IS_SELECT);
 
         SelectTokenStateDto selectState = new SelectTokenStateDto(TEST_ROOM_ID, HOST_ID);
         selectState.getTokensToTake().putAll(Map.of(DIAMOND, 1, SAPPHIRE, 1, RUBY, 1)); // 총 3개
@@ -193,14 +199,16 @@ class PlayGameServiceTest {
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
         // ✨ Validator Mocking: 4번째 토큰 선택 시 발생하는 예외를 던지도록 설정
-        doThrow(new IllegalArgumentException(ErrorCode.INVALID_TOKEN_ACTION.getMessage() + " (최대 3개 초과)"))
+        doThrow(new GameLogicException(ErrorCode.INVALID_TOKEN_ACTION))
                 .when(tokenAcquisitionValidator).validatePartialTokenAcquisition(any(), any());
 
 
         // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
+        GameLogicException exception = assertThrows(GameLogicException.class, () -> {
             playGameService.selectToken(request);
-        }, ErrorCode.INVALID_TOKEN_ACTION.getMessage() + " (최대 3개 초과)");
+        });
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN_ACTION);
 
         verify(selectTokenStateRepository, times(0)).save(any());
         verify(tokenAcquisitionValidator, times(1)).validatePartialTokenAcquisition(any(), any());
@@ -213,8 +221,8 @@ class PlayGameServiceTest {
         // 테스트를 위해 초기 상태에서 ONYX 토큰 개수를 3개로 설정 (4개 미만)
         initialGameState.getBoardStateDto().getAvailableTokens().put(ONYX, 3);
 
-        SelectTokenRequestDto request1 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
-        SelectTokenRequestDto request2 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, true);
+        SelectTokenRequestDto request1 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, IS_SELECT);
+        SelectTokenRequestDto request2 = new SelectTokenRequestDto(TEST_ROOM_ID, HOST_ID, ONYX, IS_SELECT);
 
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
@@ -227,8 +235,8 @@ class PlayGameServiceTest {
         when(selectTokenStateRepository.save(any(SelectTokenStateDto.class))).thenReturn(mutableSelectState);
 
         // ✨ Validator Mocking: 첫 번째 호출은 성공, 두 번째 호출은 실패하도록 설정
-        doNothing() // 1. 첫 번째 호출은 성공
-                .doThrow(new IllegalArgumentException(ErrorCode.INVALID_TWO_TOKEN_RULE.getMessage())) // 2. 두 번째 호출은 실패
+        doNothing()
+                .doThrow(new GameLogicException(ErrorCode.INVALID_TWO_TOKEN_RULE))
                 .when(tokenAcquisitionValidator).validatePartialTokenAcquisition(any(), any());
 
 
@@ -236,9 +244,11 @@ class PlayGameServiceTest {
         playGameService.selectToken(request1);
 
         // 2. 두 번째 선택 (ONYX: 2 시도 -> 실패 예상)
-        assertThrows(IllegalArgumentException.class, () -> {
+        GameLogicException exception = assertThrows(GameLogicException.class, () -> {
             playGameService.selectToken(request2);
-        }, ErrorCode.INVALID_TWO_TOKEN_RULE.getMessage());
+        });
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_TWO_TOKEN_RULE);
 
         // save가 1번만 호출되었는지 검증 (첫 번째 성공만)
         verify(selectTokenStateRepository, times(1)).save(any());
@@ -251,19 +261,21 @@ class PlayGameServiceTest {
     // =================================================================
 
     @Test
-    @DisplayName("실패: 현재 턴이 아닌 유저가 토큰 선택을 시도하면 IllegalStateException이 발생해야 한다.")
+    @DisplayName("실패: 현재 턴이 아닌 유저가 토큰 선택을 시도하면 GameLogicException이 발생해야 한다.")
     void selectToken_ShouldFail_WhenNotCurrentPlayerTriesToSelect() {
         // Given
         // 현재 턴은 HOST_ID (setUp에서 설정)
         // GUEST_ID가 선택을 시도하는 요청
-        SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, GUEST_ID, DIAMOND, true);
+        SelectTokenRequestDto request = new SelectTokenRequestDto(TEST_ROOM_ID, GUEST_ID, DIAMOND, IS_SELECT);
 
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
         // When & Then
-        assertThrows(IllegalStateException.class, () -> {
+        GameLogicException exception = assertThrows(GameLogicException.class, () -> {
             playGameService.selectToken(request);
-        }, "현재 턴이 아닙니다. 토큰을 선택할 수 없습니다.");
+        });
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_CURRENT_TURN);
 
         // save는 물론, Validator도 호출되지 않았는지 확인
         verify(selectTokenStateRepository, times(0)).save(any());
@@ -322,9 +334,11 @@ class PlayGameServiceTest {
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
 
         // When & Then
-        assertThrows(IllegalStateException.class, () -> {
+        GameLogicException exception = assertThrows(GameLogicException.class, () -> {
             playGameService.discardToken(request);
-        }, "현재 턴이 아닙니다. 토큰을 버릴 수 없습니다.");
+        });
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.NOT_CURRENT_TURN);
     }
 
     // =================================================================
@@ -341,12 +355,9 @@ class PlayGameServiceTest {
 
         // Mock Redis 호출
         when(selectTokenStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(selectState));
+        when(cardSelectionStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.empty()); // 카드 선택 안함
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
         when(gameStateRepository.save(any(GameStateDto.class))).thenAnswer(i -> i.getArgument(0));
-
-        // Validator Mocking: 최종 검증이 성공하도록 설정 (Do Nothing)
-        // Verify the final validator was called once and succeeded
-        verify(tokenAcquisitionValidator, times(0)).validateTokenAcquisition(any(), any());
 
         // When
         GameStateDto result = playGameService.endTurn(TEST_ROOM_ID);
@@ -383,6 +394,7 @@ class PlayGameServiceTest {
         // Given
         // Mock 중간 선택 상태: Optional.empty() (선택 안 함)
         when(selectTokenStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.empty());
+        when(cardSelectionStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.empty()); // 카드 선택 안함
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
         when(gameStateRepository.save(any(GameStateDto.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -395,7 +407,9 @@ class PlayGameServiceTest {
         assertThat(boardTokens.get(DIAMOND)).isEqualTo(4);
 
         // 2. 임시 선택 상태 삭제 검증 (Cleanup)
-        verify(selectTokenStateRepository, times(1)).deleteById(TEST_ROOM_ID); // deleteById는 호출됨 (정리 로직)
+        // 🚨 수정: 상태가 없으므로 deleteById는 호출되지 않아야 합니다. times(1) -> times(0)으로 변경.
+        verify(selectTokenStateRepository, times(0)).deleteById(TEST_ROOM_ID);
+        verify(cardSelectionStateRepository, times(0)).deleteById(TEST_ROOM_ID); // 카드 선택 상태도 마찬가지로 없으므로 0으로 검증
 
         // 3. 턴 변경 검증 (HOST -> GUEST)
         assertThat(result.getCurrentPlayer().getPlayerId()).isEqualTo(GUEST_ID);
