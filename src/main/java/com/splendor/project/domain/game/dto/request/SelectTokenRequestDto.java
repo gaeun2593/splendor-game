@@ -19,5 +19,7 @@ public class SelectTokenRequestDto {
     private GemType token;
 
     // 해당 토큰을 '선택'했는지 '취소'했는지 구분하는 플래그 (선택: true, 취소: false)
-    private boolean isSelected;
+    //private boolean isSelect;
+
+    private SelectStatus selectStatus ;
 }

@@ -57,6 +57,8 @@ public class TokenAcquisitionValidator {
         } else if (distinctGemCount >= 2) {
             // 4. 서로 다른 종류 토큰 획득 시 개수 검증 (각각 1개만 가능)
             if (validTokensToTake.values().stream().anyMatch(count -> count > 1)) {
+                System.out.println("distinctGemCount = " + distinctGemCount);
+                System.out.println("validTokensToTake = " + validTokensToTake);
                 throw new IllegalArgumentException(ErrorCode.INVALID_TOKEN_ACTION.getMessage() + " (여러 종류 획득 시 각 1개 제한)");
             }
         }

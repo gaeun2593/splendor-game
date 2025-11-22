@@ -2,6 +2,7 @@ package com.splendor.project.domain.game.service;
 
 import com.splendor.project.domain.data.GemType;
 import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
+import com.splendor.project.domain.game.dto.request.SelectStatus;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.*;
 import com.splendor.project.domain.game.repository.GameStateRepository;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 
 import static com.splendor.project.domain.data.GemType.*;
+import static com.splendor.project.domain.game.dto.request.SelectStatus.IS_SELECT;
 
 @Service
 @RequiredArgsConstructor
@@ -36,12 +38,14 @@ public class PlayGameService {
     public GameStateDto gameStart(Long roomId) {
         // 1. 보드 및 방 정보 초기화
         BoardStateDto boardStateDto = initialGameService.initializeGame();
+        System.out.println("boardStateDto = " + boardStateDto);
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
 
         // 2. 플레이어 순서 섞기 및 현재 턴 플레이어 설정
         List<Player> players = room.getPlayers();
         Collections.shuffle(players);
+
 
         Player startingPlayer = players.get(0);
         GamePlayerDto gamePlayerDto = new GamePlayerDto(startingPlayer.getNickname(), startingPlayer.getPlayerId());
@@ -77,11 +81,11 @@ public class PlayGameService {
     /**
      * 플레이어가 토큰을 하나씩 선택/취소할 때마다 호출되는 중간 검증 및 상태 관리 로직.
      */
-    public Map<GemType, Integer> selectToken(SelectTokenRequestDto request) {
+    public ResponseTokenDto selectToken(SelectTokenRequestDto request) {
         Long roomId = request.getRoomId();
         String senderId = request.getPlayerId();
         GemType token = request.getToken();
-        boolean isSelected = request.isSelected();
+        SelectStatus selectStatus = request.getSelectStatus();
 
         GameStateDto gameStateDto = gameStateRepository.findById(roomId)
                 .orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
@@ -90,13 +94,18 @@ public class PlayGameService {
         if (!gameStateDto.getCurrentPlayer().getPlayerId().equals(senderId)) {
             throw new IllegalStateException("현재 턴이 아닙니다. 토큰을 선택할 수 없습니다.");
         }
+        SelectTokenStateDto tokenStateDto = selectTokenStateRepository.findById(roomId).orElseThrow(() -> {
+            throw new RuntimeException("Ff");
+        });
 
         SelectTokenStateDto selectState = selectTokenStateRepository.findById(roomId)
                 .orElseGet(() -> new SelectTokenStateDto(roomId, gameStateDto.getCurrentPlayer().getPlayerId()));
+
+
         Map<GemType, Integer> currentSelections = selectState.getTokensToTake();
         int currentCount = currentSelections.getOrDefault(token, 0);
 
-        if (isSelected) {
+        if (selectStatus.equals(IS_SELECT)) {
             Map<GemType, Integer> proposedSelections = new HashMap<>(currentSelections);
             proposedSelections.put(token, currentCount + 1);
 
@@ -113,9 +122,8 @@ public class PlayGameService {
                 }
             }
         }
-
         selectTokenStateRepository.save(selectState);
-        return currentSelections;
+        return new ResponseTokenDto(currentSelections);
     }
 
 

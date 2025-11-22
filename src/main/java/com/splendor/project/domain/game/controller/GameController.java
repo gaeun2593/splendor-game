@@ -4,6 +4,7 @@ import com.splendor.project.domain.data.GemType;
 import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.GameStateDto;
+import com.splendor.project.domain.game.dto.response.ResponseTokenDto;
 import com.splendor.project.domain.game.dto.response.WebSocketResponse;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
 import com.splendor.project.domain.game.dto.response.SelectedPlayer;
@@ -27,6 +28,7 @@ public class GameController {
 
     @MessageMapping("/game-screen/{roomId}")
     public void gameStartMessage(@DestinationVariable Long roomId) {
+        System.out.println("roomId = " + roomId);
         String specificRoomTopic = "/topic/game-screen/" + roomId;
         try {
             GameStateDto gameStateDto = playGameService.gameStart(roomId);
@@ -37,7 +39,6 @@ public class GameController {
     }
 
     @MessageMapping("/game-choice-screen/{roomId}")
-
     public void gameChoiceMessage(@Payload ChoicePlayerDto choicePlayerDto, @DestinationVariable Long roomId){
         String specificRoomTopic = "/topic/game-choice-screen/" + roomId;
         SelectedPlayer selectedPlayer = new SelectedPlayer(choicePlayerDto.getSplendorAction());
@@ -48,11 +49,11 @@ public class GameController {
     // --- 토큰 선택/취소 (selectToken) ---
     @MessageMapping("/game-select-token/{roomId}")
     public void selectTokenMessage(@Payload SelectTokenRequestDto request, @DestinationVariable Long roomId) {
+        System.out.println("request = " + request);
         String specificRoomTopic = "/topic/game-select-token/" + roomId;
         try {
-            Map<GemType, Integer> selectedTokens = playGameService.selectToken(request);
-
-            messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.success(selectedTokens));
+            ResponseTokenDto responseTokenDto = playGameService.selectToken(request);
+            messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.success(responseTokenDto));
         } catch (IllegalArgumentException | IllegalStateException | NoSuchElementException e) {
             messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.error(e.getMessage()));
         }
@@ -68,6 +69,7 @@ public class GameController {
             messagingTemplate.convertAndSend(gameScreenTopic, WebSocketResponse.success(gameStateDto));
         } catch (IllegalArgumentException | IllegalStateException | NoSuchElementException e) {
             messagingTemplate.convertAndSend(gameScreenTopic, WebSocketResponse.error(e.getMessage()));
+
         }
     }
 
