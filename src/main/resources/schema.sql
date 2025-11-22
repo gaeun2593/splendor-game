@@ -1,3 +1,6 @@
+DROP TABLE IF EXISTS static_cards;
+DROP TABLE IF EXISTS static_nobles;
+
 -- schema.sql
 CREATE TABLE static_cards (
     id BIGINT PRIMARY KEY,
