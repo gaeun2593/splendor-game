@@ -3,6 +3,7 @@ package com.splendor.project.domain.player.entity;
 import com.splendor.project.domain.room.entity.Room;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 

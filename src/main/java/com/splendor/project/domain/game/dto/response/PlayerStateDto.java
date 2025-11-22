@@ -17,6 +17,15 @@ public class PlayerStateDto {
    // private List<CardDto> reservedCards ;  // 킵(예약)한 카드 목록 (최대 3장)
   //  private List<NobleDto> nobles ; // 획득한 귀족 타일 목록
 
+    // 동점 시 1순위
+    private int purchasedCardCount;
+
+    // 동점 시 2순위
+    private int nobleCount; // 획득한 귀족 타일 수
+
+    //  후공 플레이어 승리 룰을 위한 턴 순서 인덱스
+    private int turnOrder;
+
 
 
 }
