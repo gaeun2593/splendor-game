@@ -2,11 +2,14 @@ package com.splendor.project.domain.game.controller;
 
 import com.splendor.project.domain.data.GemType;
 import com.splendor.project.domain.game.dto.request.DiscardTokenRequestDto;
+import com.splendor.project.domain.game.dto.request.SelectCardRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.response.GameStateDto;
+import com.splendor.project.domain.game.dto.response.SelectionCardStateDto;
 import com.splendor.project.domain.game.dto.response.WebSocketResponse;
 import com.splendor.project.domain.game.dto.request.ChoicePlayerDto;
 import com.splendor.project.domain.game.service.PlayGameService;
+import com.splendor.project.exception.GameLogicException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -65,6 +68,23 @@ public class GameController {
             messagingTemplate.convertAndSend(gameScreenTopic, WebSocketResponse.success(gameStateDto));
         } catch (IllegalArgumentException | IllegalStateException | NoSuchElementException e) {
             messagingTemplate.convertAndSend(gameScreenTopic, WebSocketResponse.error(e.getMessage()));
+        }
+    }
+
+    // --- 카드 선택/취소 (selectCard) ---
+    @MessageMapping("/game-select-card/{roomId}")
+    public void selectCardMessage(@Payload SelectCardRequestDto request, @DestinationVariable Long roomId) {
+        String specificRoomTopic = "/topic/game-select-card/" + roomId;
+        try {
+            SelectionCardStateDto selectionState = playGameService.selectCard(request);
+
+            messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.success(selectionState));
+
+        } catch (GameLogicException e) {
+            messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.error(e.getMessage()));
+
+        } catch (NoSuchElementException | IllegalStateException e) {
+            messagingTemplate.convertAndSend(specificRoomTopic, WebSocketResponse.error(e.getMessage()));
         }
     }
 
