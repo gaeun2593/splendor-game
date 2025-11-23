@@ -9,6 +9,7 @@ import com.splendor.project.domain.room.entity.Room;
 import com.splendor.project.domain.room.entity.RoomStatus;
 import com.splendor.project.domain.room.repository.RoomRepository;
 import com.splendor.project.exception.ErrorCode;
+import com.splendor.project.exception.GameLogicException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +45,7 @@ public class PlayerService {
 
     public ResponseRoomDto join(RequestRoomDto requestRoomDto, Long roomId) {
 
-        Room room = roomRepository.findById(roomId).orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new GameLogicException(ErrorCode.ROOM_NOT_FOUND));
 
 
         Player createdPlayer = new Player(room , requestRoomDto.getHostName() , true , false) ;
@@ -56,8 +57,13 @@ public class PlayerService {
 
     public ResponseRoomDto toggleReady(String playerId , Long roomId) {
 
-        Room room = roomRepository.findById(roomId).orElseThrow(() -> new NoSuchElementException(ErrorCode.ROOM_NOT_FOUND.getMessage()));
-        Player savedPlayer = playerRepository.findById(playerId).orElseThrow(() ->  new NoSuchElementException(ErrorCode.PLAYER_NOT_FOUND.getMessage()));
+        // Room 찾기 실패 시 GameLogicException 사용
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new GameLogicException(ErrorCode.ROOM_NOT_FOUND));
+
+        // Player 찾기 실패 시 GameLogicException 사용
+        Player savedPlayer = playerRepository.findById(playerId)
+                .orElseThrow(() -> new GameLogicException(ErrorCode.PLAYER_NOT_FOUND));
 
         savedPlayer.toggleReady();
 
