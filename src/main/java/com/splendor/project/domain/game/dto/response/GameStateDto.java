@@ -1,5 +1,6 @@
 package com.splendor.project.domain.game.dto.response;
 
+import com.splendor.project.domain.game.entity.GameStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,7 +24,7 @@ public class GameStateDto implements Serializable {
     private GamePlayerDto currentPlayer;
 
     // 게임이 종료되었는지 여부
-    private boolean isGameOver = false;
+    private GameStatus gameStatus = GameStatus.PLAYING;
 
     // 최종 승자 (게임이 끝나지 않았다면 null)
     private GamePlayerDto winner;

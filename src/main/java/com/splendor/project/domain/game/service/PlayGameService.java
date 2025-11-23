@@ -7,6 +7,7 @@ import com.splendor.project.domain.game.dto.request.SelectStatus;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectCardRequestDto;
 import com.splendor.project.domain.game.dto.response.*;
+import com.splendor.project.domain.game.entity.GameStatus;
 import com.splendor.project.domain.game.logic.PlayerStateCalculator;
 import com.splendor.project.domain.game.repository.SelectionCardStateRepository;
 import com.splendor.project.domain.game.repository.GameStateRepository;
@@ -73,7 +74,7 @@ public class PlayGameService {
                 playerStateDtos,
                 room.getRoomId(),
                 gamePlayerDto,
-                false,
+                GameStatus.PLAYING,
                 null,
                 false,
                 startingPlayer.getPlayerId()
@@ -298,7 +299,7 @@ public class PlayGameService {
             GamePlayerDto winner = determineWinner(gameStateDto);
 
             // 최종 상태 DTO에 결과 기록
-            gameStateDto.setGameOver(true);
+            gameStateDto.setGameStatus(GameStatus.GAME_OVER);
             gameStateDto.setWinner(winner);
 
             // Redis 정리 및 최종 DTO 반환 (저장 불필요)
