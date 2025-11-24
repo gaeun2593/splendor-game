@@ -71,11 +71,14 @@ class PlayGameServiceCommitTest {
         Map<GemType, Integer> hostTokens = new HashMap<>(Map.of(
                 DIAMOND, 1, SAPPHIRE, 2, EMERALD, 2, RUBY, 2, ONYX, 3, GOLD, 1));
         Map<GemType, Integer> hostBonuses = new HashMap<>(Map.of(DIAMOND, 0, SAPPHIRE, 0, EMERALD, 0, RUBY, 0, ONYX, 0, GOLD, 0));
-        hostInitialState = new PlayerStateDto(hostGamePlayer, 0, hostTokens, hostBonuses);
+
+        // 1. PlayerStateDto 생성자 수정 (purchasedCardCount, nobleCount, turnOrder 추가)
+        hostInitialState = new PlayerStateDto(hostGamePlayer, 0, hostTokens, hostBonuses, 0, 0, 0);
 
         List<PlayerStateDto> playerStates = List.of(
                 hostInitialState,
-                new PlayerStateDto(guestGamePlayer, 0, new HashMap<>(), new HashMap<>())
+                // Guest 플레이어 초기화 시에도 0, 0, 1 추가
+                new PlayerStateDto(guestGamePlayer, 0, new HashMap<>(), new HashMap<>(), 0, 0, 1)
         );
 
         Map<GemType, Integer> boardTokens = new HashMap<>(Map.of(
@@ -87,7 +90,17 @@ class PlayGameServiceCommitTest {
                 boardTokens
         );
 
-        initialGameState = new GameStateDto(boardState, playerStates, TEST_ROOM_ID, hostGamePlayer);
+        // 2. GameStateDto 생성자 수정 (isFinalRound, startingPlayerId, isGameOver, winner 추가)
+        initialGameState = new GameStateDto(
+                boardState,
+                playerStates,
+                TEST_ROOM_ID,
+                hostGamePlayer,
+                false, // isGameOver
+                null, // winner
+                false, // isFinalRound
+                HOST_ID // startingPlayerId
+        );
 
         when(gameStateRepository.findById(TEST_ROOM_ID)).thenReturn(Optional.of(initialGameState));
     }

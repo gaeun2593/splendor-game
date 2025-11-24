@@ -96,18 +96,31 @@ class PlayGameServiceTest {
         List<PlayerStateDto> playerStates = List.of(
                 new PlayerStateDto(hostGamePlayer, 0,
                         new HashMap<>(Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0)),
-                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0)),
+                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0),
+                        0, // purchasedCardCount
+                        0, // nobleCount
+                        0  // turnOrder
+                ),
                 new PlayerStateDto(guestGamePlayer, 0,
                         new HashMap<>(Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0)),
-                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0))
+                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0),
+                        0, // purchasedCardCount
+                        0, // nobleCount
+                        1  // turnOrder
+                )
         );
+
         initialGameState = new GameStateDto(
                 new BoardStateDto(List.of(), List.of(), new HashMap<>(Map.of(
                         DIAMOND, 4, SAPPHIRE, 4, EMERALD, 4, RUBY, 4, ONYX, 4, GOLD, 5
                 ))),
                 playerStates,
                 TEST_ROOM_ID,
-                hostGamePlayer
+                hostGamePlayer,
+                false,
+                null,
+                false,
+                HOST_ID
         );
     }
 

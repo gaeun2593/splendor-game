@@ -7,6 +7,7 @@ import com.splendor.project.domain.game.dto.request.SelectStatus;
 import com.splendor.project.domain.game.dto.request.SelectTokenRequestDto;
 import com.splendor.project.domain.game.dto.request.SelectCardRequestDto;
 import com.splendor.project.domain.game.dto.response.*;
+import com.splendor.project.domain.game.entity.GameStatus;
 import com.splendor.project.domain.game.logic.PlayerStateCalculator;
 import com.splendor.project.domain.game.repository.SelectionCardStateRepository;
 import com.splendor.project.domain.game.repository.GameStateRepository;
@@ -51,28 +52,35 @@ public class PlayGameService {
         List<Player> players = room.getPlayers();
         Collections.shuffle(players);
 
-
         Player startingPlayer = players.get(0);
         GamePlayerDto gamePlayerDto = new GamePlayerDto(startingPlayer.getNickname(), startingPlayer.getPlayerId());
 
-        List<PlayerStateDto> playerStateDtos = players.stream()
-                .map(player -> new PlayerStateDto(
-                        new GamePlayerDto(player.getNickname(), player.getPlayerId()),
-                        0,
-                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0),
-                        Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0)
-                ))
-                .toList();
+        List<PlayerStateDto> playerStateDtos = new ArrayList<>();
+        for (int i = 0; i < players.size(); i++) {
+            Player player = players.get(i);
+            playerStateDtos.add(new PlayerStateDto(
+                    new GamePlayerDto(player.getNickname(), player.getPlayerId()),
+                    0,
+                    Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0),
+                    Map.of(DIAMOND, 0, RUBY, 0, EMERALD, 0, SAPPHIRE, 0, ONYX, 0, GOLD, 0),
+                    0,
+                    0,
+                    i  // turnOrder 초기화
+            ));
+        }
 
         GameStateDto gameStateDto = new GameStateDto(
                 boardStateDto,
                 playerStateDtos,
                 room.getRoomId(),
-                gamePlayerDto
+                gamePlayerDto,
+                GameStatus.PLAYING,
+                null,
+                false,
+                startingPlayer.getPlayerId()
         );
 
         gameStateRepository.save(gameStateDto);
-
         return gameStateDto;
     }
 
@@ -256,7 +264,7 @@ public class PlayGameService {
         boolean cardPurchaseAttempted = selectionStateOpt.isPresent() && selectionStateOpt.get().getCardIdToBuy() != null;
         boolean tokenAcquisitionAttempted = selectStateOpt.isPresent() && selectStateOpt.get().getTokensToTake().values().stream().mapToInt(Integer::intValue).sum() > 0;
 
-        // 1. 행동 타입 결정 및 실행
+        // 행동 타입 결정 및 실행
         if (cardPurchaseAttempted) {
             // 카드 구매 액션 실행 (Commit)
             commitCardPurchase(roomId, gameStateDto, selectionStateOpt.get());
@@ -279,10 +287,27 @@ public class PlayGameService {
             selectStateOpt.ifPresent(state -> selectTokenStateRepository.deleteById(roomId));
         }
 
-        // 2. 다음 플레이어로 턴 변경 로직
+        // 1. 점수 체크 및 최종 라운드 시작 플래그 설정 (점수 15점 이상 체크)
+        checkGameEndCondition(gameStateDto);
+
+        // 2. 다음 플레이어로 턴 변경 로직 (항상 실행되어야 함)
         advanceTurn(gameStateDto);
 
-        // 3. Redis에 업데이트된 게임 상태 저장
+        // 3. 게임 종료 조건 확인 (턴을 받은 플레이어(currentPlayer)가 시작 플레이어인지 확인)
+        if (gameStateDto.isFinalRound() && isCurrentPlayerStartingPlayer(gameStateDto)) {
+            // 게임 종료: 라운드 종료
+            GamePlayerDto winner = determineWinner(gameStateDto);
+
+            // 최종 상태 DTO에 결과 기록
+            gameStateDto.setGameStatus(GameStatus.GAME_OVER);
+            gameStateDto.setWinner(winner);
+
+            // Redis 정리 및 최종 DTO 반환 (저장 불필요)
+            gameStateRepository.deleteById(roomId);
+            return gameStateDto;
+        }
+
+        // 4. 게임이 계속되는 경우: Redis에 업데이트된 게임 상태 저장
         gameStateRepository.save(gameStateDto);
         return gameStateDto;
     }
@@ -311,6 +336,9 @@ public class PlayGameService {
         // 상태 변경
         updatePlayerStateAfterPurchase(currentPlayerState, cardToBuy, finalPayment);
         updateBoardStateAfterPurchase(gameStateDto.getBoardStateDto(), cardToBuy, finalPayment);
+
+        // 카드 카운트 업데이트
+        currentPlayerState.setPurchasedCardCount(currentPlayerState.getPurchasedCardCount() + 1);
     }
 
     private void commitTokenAcquisition(Long roomId, GameStateDto gameStateDto, SelectTokenStateDto selectState) {
@@ -414,5 +442,46 @@ public class PlayGameService {
             int count = entry.getValue();
             playerTokens.put(gemType, playerTokens.getOrDefault(gemType, 0) + count);
         }
+    }
+
+    // 턴을 받은 플레이어(currentPlayer)가 시작 플레이어인지 확인
+    private boolean isCurrentPlayerStartingPlayer(GameStateDto gameStateDto) {
+        return gameStateDto.getCurrentPlayer().getPlayerId().equals(gameStateDto.getStartingPlayerId());
+    }
+
+    // 점수 15점 이상 달성 시 isFinalRound 플래그 설정
+    private void checkGameEndCondition(GameStateDto gameStateDto) {
+        if (gameStateDto.isFinalRound()) {
+            return; // 이미 최종 라운드가 시작됨
+        }
+
+        boolean scoreMet = gameStateDto.getPlayerStateDto().stream()
+                .anyMatch(playerState -> playerState.getScore() >= 15);
+
+        if (scoreMet) {
+            gameStateDto.setFinalRound(true);
+            System.out.println("15점 이상 달성! 최종 라운드가 시작됩니다.");
+        }
+    }
+
+    // 최종 승자 결정 로직 (규칙 5, 6 반영)
+    private GamePlayerDto determineWinner(GameStateDto gameStateDto) {
+        List<PlayerStateDto> players = gameStateDto.getPlayerStateDto();
+
+        Optional<PlayerStateDto> winnerState = players.stream()
+                .max(Comparator
+                        // 1. 점수가 높은 사람 (규칙 5)
+                        .comparing(PlayerStateDto::getScore)
+                        // 2. 개발 카드 수가 더 적은 사람 (규칙 6-1)
+                        .thenComparing(player -> player.getPurchasedCardCount() * -1) // * -1을 곱하여 '적은' 사람이 높은 순위가 되도록 반전
+                        // 3. 귀족 카드를 더 많이 가지고 있는 사람 (규칙 6-2)
+                        .thenComparing(PlayerStateDto::getNobleCount)
+                        // 4. 남은 보석 토큰의 수가 더 많은 사람 (규칙 6-3)
+                        .thenComparing(player -> player.getTokens().values().stream().mapToInt(Integer::intValue).sum())
+                        // 5. 후공 플레이어의 승리 (턴 순서 인덱스가 더 큰 사람) (규칙 6-4)
+                        .thenComparing(PlayerStateDto::getTurnOrder)
+                );
+
+        return winnerState.map(PlayerStateDto::getPlayer).orElse(null);
     }
 }
